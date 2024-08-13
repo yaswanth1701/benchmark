@@ -57,10 +57,11 @@ class postProcessing:
         self.csv_file = open(self.metrics_path, mode='w', newline='')
         self.csv_writer = csv.writer(self.csv_file)
 
-        metrics = ["angMomentum0", "angMomentumErr_maxAbs","angPositionErr_x_maxAbs", 
-           "angPositionErr_y_maxAbs", "angPositionErr_z_maxAbs", "collision", 
-           "dt", "energyError_maxAbs", 	"engine", "isComplex", "linPositionErr_maxAbs",
-           "linVelocityErr_maxAbs", "modelCount", "simTime", "time", "timeRatio", "classname"]
+        metrics = ["energy0", "energyErr_maxabs", "contactForceErr_a_maxAbs", "contactForceErr_b_maxAbs",
+                   "contactForceErr_c_maxAbs", "frictionForceMagErr_a_maxAbs", "frictionForceMagErr_b_maxAbs",
+                   "frictionForceMagErr_c_maxAbs", "frictionForceDirErr_a_maxAbs", "frictionForceDirErr_b_maxAbs",
+                   "frictionForceDirErr_c_maxAbs", "face_angle", "dt", "engine", "friction_model", "cog_h", 
+                   "isComplex", "modelCount", "simTime", "time", "timeRatio", "classname"]
         self.csv_writer.writerow(metrics)
 
     def read_file(self,file_path: str):
@@ -199,8 +200,7 @@ class postProcessing:
         return F_mag_error, F_dir_error
     
     def calculate_mertics(self, states: np.ndarray,
-                          model_no: int, face_angle: str,
-                          slope: float):
+                          face_angle: str):
         sim_time = states[:, 0]
         linear_accel = states[:, 2:5]
         angular_accel = states[:, 5:8]
@@ -211,6 +211,7 @@ class postProcessing:
         contact1_info = states[:, 21:34]      
         contact2_info = states[:, 34:47]
         contact3_info = states[:, 47:]
+        slope = self.surface_slope
 
         g = np.array([-np.sin(slope)*9.8,0,-np.cos(slope)*9.8]).reshape(3,1)
 
@@ -230,7 +231,7 @@ class postProcessing:
 
             # translation energy + rotational energy + potential energy
             tran_E = 0.5*self.m*v[i].dot(v[i])
-            rot_E = 0.5*omega_b.dot(self.I.dot(omega_b))
+            rot_E = 0.5*omega_b.dot(self.I[face_angle].dot(omega_b))
             V = - self.m*self.gravity.dot(pos[i])
             E[i] = tran_E + rot_E + V
 
@@ -258,9 +259,12 @@ class postProcessing:
                 self.contact_force_error[i, 1] = np.linalg.norm(contact_forces[1, :] - contact2_info[7:10])
                 self.contact_force_error[i, 2] = np.linalg.norm(contact_forces[2, :] - contact3_info[7:10])
 
-        initial_energy = E[0]
+        self.initial_energy = E[0]
 
-        self.E_error = E - initial_energy
+        self.E_error = E - self.initial_energy
+        self.sim_time = sim_time[-1]
+
+        self.time_ratio = self.computation_time/self.sime_time
         
 
     def get_maxabs_error(self):
@@ -276,10 +280,22 @@ class postProcessing:
             self.F_maxabs_mag_error_c = np.max(self.F_mag_error[:, 2])
         else:
             self.contact_force_maxabs_error_a = np.max(self.contact_force_error[:, 0])
-            self.contact_force_maxabs_error_a = np.max(self.contact_force_error[:, 1])
-            self.contact_force_maxabs_error_a = np.max(self.contact_force_error[:, 2])
+            self.contact_force_maxabs_error_b = np.max(self.contact_force_error[:, 1])
+            self.contact_force_maxabs_error_c = np.max(self.contact_force_error[:, 2])
 
+    def save_metrics(self, face_angle, model_count):
+        if complex:
+            class_name = "sliding"
+        else:
+            class_name = "static"
 
+        self.csv_writer.writerow([self.initial_energy, self.E_maxabs_error, self.contact_force_maxabs_error_a,
+                                  self.contact_force_maxabs_error_b, self.contact_force_maxabs_error_b, 
+                                  self.F_maxabs_mag_error_a, self.F_maxabs_mag_error_b, self.F_maxabs_mag_error_c,
+                                  self.F_maxabs_dir_error_a, self.F_maxabs_dir_error_b, self.F_maxabs_dir_error_c,
+                                  face_angle, self.dt, self.physics_engine, self.fricition_model, self.cog_height,
+                                  self.complex, model_count, self.sim_time, self.computation_time, self.time_ratio,
+                                  class_name])
 
         
 if __name__ == "__main__":
@@ -297,19 +313,22 @@ if __name__ == "__main__":
         physic_engine = config[0,0]
         dt = config[0,1]
         complex = bool(config[0,2])
-        collision = bool(config[0,3])
-        modelCount = config[0,4]
-        computation_time = config[0,5]
-        log_multiple = bool(config[0,6])
-        class_name = config[0,7]
-            
-        print(f" Physics engines: {physic_engine} \n Timestep: {dt} \n Complex: {complex} \n Number of models: {modelCount}")
-        post_processing.set_test_parameters(physic_engine, dt, complex, collision, modelCount, computation_time, class_name)
+        slope = config[0,3]
+        friction_coefficient = config[0,4]
+        friction_model = config[0,4]
+        cog_height = config[0,5]
+        wall_time = config[0, 6]
+        equal_KE = config[0, 7]
 
-        if log_multiple:
-            no_of_models = modelCount
+        if complex:
+            no_of_models = 19
         else:
-            no_of_models = 1 
+            no_of_models = 5
+            
+        print(f" Physics engines: {physic_engine} \n Timestep: {dt} \n Complex: {complex} \n Number of models: {no_of_models}")
+        post_processing.set_test_parameters(physic_engine, dt, complex, slope, friction_coefficient, friction_model,
+                                            cog_height, wall_time, equal_KE)
+
         states_per_model = int(len(states[:,0])/no_of_models)
         states = states.reshape(no_of_models, states_per_model,-1)
 
@@ -318,26 +337,13 @@ if __name__ == "__main__":
             model_states = states[i]
             sim_time = model_states[:,0]
 
-            post_processing.get_analytical_sol(sim_time, i)
-            post_processing.cal_metrics(model_states)
-            post_processing.save_metrics()
+            if complex:
+                face_angle = MODEL_NAME[i]
+            else:
+                face_angle = '45'
+
+            post_processing.calculate_mertics(sim_time, i, face_angle)
+            post_processing.get_maxabs_error()
+            post_processing.save_metrics(face_angle, no_of_models)
     
     post_processing.csv_file.close()
-    print(f"final metrics path {post_processing.metrics_path}")
-    data = pd.read_csv(post_processing.metrics_path)
-
-    if dir=="BENCHMARK_boxes_dt":
-        storted_data = data.sort_values(by='dt')
-    else:
-        storted_data = data.sort_values(by='modelCount')
-
-    storted_data.to_csv(post_processing.metrics_path, index=False)
-
-
-
-    
-
-
-
-
-     
