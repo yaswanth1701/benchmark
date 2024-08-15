@@ -11,7 +11,8 @@ import sympy as sym
 
 SOURCE_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
-BENCHMARK_NAME = sys.argv[1]
+# BENCHMARK_NAME = sys.argv[1]
+BENCHMARK_NAME = "BENCHMARK_triball_configuration"
 
 MODEL_NAME = ['30', '45', '60', '75', '90']
 
@@ -39,10 +40,9 @@ class postProcessing:
 
     def __init__(self, test_name):
 
-        self.mass = {'30': 0.078742493606727915,'45': 0.081476344460819278,
-                     '60': 0.060318578948924034, '75': 0.088985917618018107, 
-                     '90': 0.094448719111790758}
-
+        self.m = {'30': 0.078742493606727915,'45': 0.081476344460819278,
+                  '60': 0.060318578948924034, '75': 0.088985917618018107, 
+                  '90': 0.094448719111790758}
         
         self.I = {'30': np.array(I_30), '45': np.array(I_45), 
                   '60': np.array(I_60), '75': np.array(I_75),
@@ -93,24 +93,27 @@ class postProcessing:
         else:
             self.class_name = "sliding"
     
-    def hat(v):
+    def hat(self, v):
         # hat operator for vector
         v = v.ravel()
         return np.array([[0, v[2], -v[1]],
                          [-v[2], 0, v[0]],
                          [v[1], -v[0], 0]])
 
-    def compute_pos_mass(self, face_angle: float, model_no: int):
+    def compute_pos_mass(self, face_angle: str):
         h = 0.15
         k = 0.05
         rho = 600
         r_c = 0.005
         r_s = 0.02
 
+        initial_com = {'30': 0, '45': 1, '60': 2, '75':3, '90':4}
+        angle = np.deg2rad(int(face_angle))
+
         ## centre of gravity location of ball and rod
-        self.ball_pos = {'a': np.array([[h - k , (model_no-1), 0.02]]),
-                    'b': np.array([[- k , h*np.tan(face_angle) + (model_no - 1), 0.02]]),
-                    'c': np.array([[- k , - h*np.tan(face_angle) + (model_no -1), 0.02]])}
+        self.ball_pos = {'a': np.array([[h - k , initial_com[face_angle], 0.02]]),
+                    'b': np.array([[- k , h*np.tan(angle) + initial_com[face_angle], 0.02]]),
+                    'c': np.array([[- k , - h*np.tan(angle) + initial_com[face_angle], 0.02]])}
         
         v_s = (4*np.pi*r_s**3)/3
         self.m_s = rho*v_s
@@ -129,19 +132,21 @@ class postProcessing:
 
     def compute_contact_force(self):
         slope = self.surface_slope
-        
-        F_a = np.array([sym.symbols('f_a%d' % i) for i in range(3)]).reshape(3,1)
-        F_b = np.array([sym.symbols('f_b%d' % i) for i in range(3)]).reshape(3,1)
-        F_c = np.array([sym.symbols('f_c%d' % i) for i in range(3)]).reshape(3,1)
 
+        n_a = sym.symbols("n_a")
+        n_b = sym.symbols("n_b")
+        n_c = sym.symbols("n_c")
+
+        F_a = np.array([0, 0, n_a]).reshape(3,1)
+        F_b = np.array([0, 0, n_b]).reshape(3,1)
+        F_c = np.array([0, 0, n_c]).reshape(3,1)
+    
         g = np.array([-np.sin(slope)*9.8,0,-np.cos(slope)*9.8]).reshape(3,1)
+
 
         eq_f = F_a + F_b + F_c + (3*self.m_s + self.m_r1 + self.m_r2 + self.m_r3)*g
 
-        # z direction force balance
-        eq1 = eq_f[0][0]
-        eq2 = eq_f[1][0]
-        eq3 = eq_f[2][0]
+        eq1 = eq_f[2][0]
         
         p_a = self.ball_pos['a']
         p_b = self.ball_pos['b']
@@ -152,33 +157,23 @@ class postProcessing:
         p_ca = self.rod_pos['ca']
     
         # moment balance about A
-        eq_t = self.hat(p_ab - p_a) @ (self.m_r1 * g) + self.hat(p_b - p_a) @ (self.m_s * g + F_b) +\
-               self.hat(p_bc - p_a) @ (self.m_r2 * g) + self.hat(p_c - p_a) @ (self.m_s *g + F_c) +\
-               self.hat(p_ca - p_a) @ (self.m_r3 * g)
-        
-        eq4 = eq_t[3][0]
-        eq5 = eq_t[4][0]
-        eq6 = eq_t[5][0]
-        eq7 = eq_t[6][0]
-        eq8 = eq_t[7][0]
-        eq9 = eq_t[8][0]
+        eq_t1 = self.hat(p_ab - p_a) @ (self.m_r1 * g) + self.hat(p_b - p_a) @ (self.m_s * g + F_b) +\
+                self.hat(p_bc - p_a) @ (self.m_r2 * g) + self.hat(p_c - p_a) @ (self.m_s *g + F_c) +\
+                self.hat(p_ca - p_a) @ (self.m_r3 * g)
+              
+        eq2 = eq_t1[0][0]
+        eq3 = eq_t1[1][0]
 
-        result = sym.linsolve([eq1, eq2, eq3, eq4, 
-                               eq5, eq6, eq7, eq8, eq9],
-                              (F_a[0], F_a[1], F_a[2],
-                               F_b[0], F_b[1], F_b[2],
-                               F_c[0], F_c[1], F_c[2],))
-        
-        return  list(result.args)[0]
+        result = sym.linsolve([eq1, eq2, eq3], (n_a, n_b, n_c))
+        return  list(result.args)
     
     def compute_slip_vel(self, com_vel: np.ndarray,
                          ang_vel: np.ndarray, r: np.ndarray):
         return com_vel + self.hat(r) @ ang_vel
     
     def compute_contact_force_error(self):
-        self.compute_pos_mass()
         contact_forces = self.compute_contact_force()
-        contact_forces = np.array(contact_forces).reshape(3,3)
+        contact_forces = np.array(contact_forces).reshape(3,1)
         return contact_forces
     
     def compute_friction_force_error(self, contact_info,
@@ -205,7 +200,7 @@ class postProcessing:
         linear_accel = states[:, 2:5]
         angular_accel = states[:, 5:8]
         v = states[:, 8:11]
-        omega = states[:, 11,14]
+        omega = states[:, 11:14]
         pos = states[:, 14:17]  
         rot = states[:, 17:21]
         contact1_info = states[:, 21:34]      
@@ -213,8 +208,8 @@ class postProcessing:
         contact3_info = states[:, 47:]
         slope = self.surface_slope
 
-        g = np.array([-np.sin(slope)*9.8,0,-np.cos(slope)*9.8]).reshape(3,1)
-
+        g = np.array([-np.sin(slope)*9.8,0,-np.cos(slope)*9.8])
+        self.N = len(sim_time)
         E = np.zeros(self.N)
         self.F_mag_error = np.zeros((self.N,3))
         self.F_dir_error = np.zeros((self.N,3))
@@ -230,9 +225,9 @@ class postProcessing:
             omega_b = np.array([omega_b[0], omega_b[1], omega_b[2]])
 
             # translation energy + rotational energy + potential energy
-            tran_E = 0.5*self.m*v[i].dot(v[i])
+            tran_E = 0.5*self.m[face_angle]*v[i].dot(v[i])
             rot_E = 0.5*omega_b.dot(self.I[face_angle].dot(omega_b))
-            V = - self.m*self.gravity.dot(pos[i])
+            V = - self.m[face_angle]*g.dot(pos[i])
             E[i] = tran_E + rot_E + V
 
             if self.complex:
@@ -254,22 +249,38 @@ class postProcessing:
                 self.F_mag_error[i, 2] = F_mag_error
                 self.F_dir_error[i, 2] = F_dir_error
             else:
+                self.compute_pos_mass(face_angle)
                 contact_forces = self.compute_contact_force_error()
-                self.contact_force_error[i, 0] = np.linalg.norm(contact_forces[0, :] - contact1_info[7:10])
-                self.contact_force_error[i, 1] = np.linalg.norm(contact_forces[1, :] - contact2_info[7:10])
-                self.contact_force_error[i, 2] = np.linalg.norm(contact_forces[2, :] - contact3_info[7:10])
+                self.contact_force_error[i, 0] = abs(contact_forces[0][0] - contact1_info[i, 9])
+                self.contact_force_error[i, 1] = abs(contact_forces[1][0] - contact2_info[i, 9])
+                self.contact_force_error[i, 2] = abs(contact_forces[2][0] - contact3_info[i, 9])
 
         self.initial_energy = E[0]
 
         self.E_error = E - self.initial_energy
         self.sim_time = sim_time[-1]
 
-        self.time_ratio = self.computation_time/self.sime_time
+        self.time_ratio = self.computation_time/self.sim_time
         
 
     def get_maxabs_error(self):
         self.E_error = self.E_error[self.E_error>0]
-        self.E_maxabs_error = np.max(self.E_error)
+
+        if (len(self.E_error)!=0):
+            self.E_maxabs_error = np.max(self.E_error)
+        else:
+            self.E_maxabs_error = 0
+
+        self.F_maxabs_dir_error_a = 0
+        self.F_maxabs_dir_error_b = 0
+        self.F_maxabs_dir_error_c = 0
+        self.F_maxabs_mag_error_a = 0
+        self.F_maxabs_mag_error_b = 0
+        self.F_maxabs_mag_error_c = 0
+        self.contact_force_maxabs_error_a = 0
+        self.contact_force_maxabs_error_b = 0
+        self.contact_force_maxabs_error_c = 0
+
         if self.complex:
             self.F_dir_error = self.F_dir_error[self.F_dir_error>0]
             self.F_maxabs_dir_error_a = np.max(self.F_dir_error[:, 0])
@@ -303,7 +314,7 @@ if __name__ == "__main__":
     print(f"BENCHMARK: {dir}")
 
     post_processing = postProcessing(dir)
-    result_dir , file_names = post_processing.get_file_names(dir)
+    result_dir , file_names = post_processing.get_file_names()
     file_names = sorted(file_names, reverse=True)
 
     for file in file_names:
@@ -326,8 +337,8 @@ if __name__ == "__main__":
             no_of_models = 5
             
         print(f" Physics engines: {physic_engine} \n Timestep: {dt} \n Complex: {complex} \n Number of models: {no_of_models}")
-        post_processing.set_test_parameters(physic_engine, dt, complex, slope, friction_coefficient, friction_model,
-                                            cog_height, wall_time, equal_KE)
+        post_processing.set_test_parameters(physic_engine, dt, friction_model, complex, slope, friction_coefficient,
+                                            cog_height, equal_KE, wall_time)
 
         states_per_model = int(len(states[:,0])/no_of_models)
         states = states.reshape(no_of_models, states_per_model,-1)
@@ -335,14 +346,14 @@ if __name__ == "__main__":
         for i in range(no_of_models):
             print(f" => Model number: {i+1}")
             model_states = states[i]
-            sim_time = model_states[:,0]
 
             if complex:
-                face_angle = MODEL_NAME[i]
-            else:
                 face_angle = '45'
+            else:
+                face_angle = MODEL_NAME[i]
+               
 
-            post_processing.calculate_mertics(sim_time, i, face_angle)
+            post_processing.calculate_mertics(model_states, face_angle)
             post_processing.get_maxabs_error()
             post_processing.save_metrics(face_angle, no_of_models)
     
