@@ -107,7 +107,7 @@ class postProcessing:
         r_s = 0.02
 
         initial_com = {'30': 0, '45': 1, '60': 2, '75':3, '90':4}
-        angle = np.deg2rad(int(face_angle))
+        angle = np.deg2rad(int(face_angle))/2
 
         ## centre of gravity location of ball and rod
         self.ball_pos = {'a': np.array([[h - k , initial_com[face_angle], 0.02]]),
