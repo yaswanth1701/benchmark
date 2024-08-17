@@ -47,7 +47,6 @@ class postProcessing:
         self.I = {'30': np.array(I_30), '45': np.array(I_45), 
                   '60': np.array(I_60), '75': np.array(I_75),
                   '90': np.array(I_90)}
-        self.mu = 0.9
 
         timestr = time.strftime("%Y%m%d-%H%M%S")
         metrics_filename = test_name + "_" + timestr + ".csv"
@@ -60,8 +59,8 @@ class postProcessing:
         metrics = ["energy0", "energyErr_maxabs", "contactForceErr_a_maxAbs", "contactForceErr_b_maxAbs",
                    "contactForceErr_c_maxAbs", "frictionForceMagErr_a_maxAbs", "frictionForceMagErr_b_maxAbs",
                    "frictionForceMagErr_c_maxAbs", "frictionForceDirErr_a_maxAbs", "frictionForceDirErr_b_maxAbs",
-                   "frictionForceDirErr_c_maxAbs", "face_angle", "dt", "engine", "friction_model", "cog_h", 
-                   "isComplex", "modelCount", "simTime", "time", "timeRatio", "classname"]
+                   "frictionForceDirErr_c_maxAbs", "face_angle", "dt", "engine", "friction_coefficient", "friction_model", 
+                   "cog_h", "isComplex", "modelCount", "simTime", "time", "timeRatio", "classname"]
         self.csv_writer.writerow(metrics)
 
     def read_file(self,file_path: str):
@@ -83,7 +82,7 @@ class postProcessing:
         self.fricition_model = friction_model
         self.complex = complex
         self.surface_slope = surface_slope
-        self.friction_coefficient = friction_coefficient
+        self.mu = friction_coefficient
         self.cog_height = cog_height
         self.equal_ke = equal_ke
         self.computation_time = computation_time
@@ -130,7 +129,7 @@ class postProcessing:
         self.m_r2 = np.pi*(r_c**2)*self.l_bc*rho
         self.m_r3 = np.pi*(r_c**2)*self.l_ca*rho
 
-    def compute_contact_force(self):
+    def compute_normal_force(self):
         slope = self.surface_slope
 
         n_a = sym.symbols("n_a")
@@ -171,10 +170,14 @@ class postProcessing:
                          ang_vel: np.ndarray, r: np.ndarray):
         return com_vel + self.hat(r) @ ang_vel
     
-    def compute_contact_force_error(self):
-        contact_forces = self.compute_contact_force()
+    def compute_normal_force_error(self, force1, force2, force3):
+        contact_forces = self.compute_normal_force()
         contact_forces = np.array(contact_forces).reshape(3,1)
-        return contact_forces
+        normal_force_error = np.zeros(3)
+        normal_force_error[0] = abs(contact_forces[0][0] - force1)
+        normal_force_error[1] = abs(contact_forces[1][0] - force2)
+        normal_force_error[2] = abs(contact_forces[2][0] - force3)
+        return normal_force_error
     
     def compute_friction_force_error(self, contact_info,
                                      v, omega, pos):
@@ -213,7 +216,7 @@ class postProcessing:
         E = np.zeros(self.N)
         self.F_mag_error = np.zeros((self.N,3))
         self.F_dir_error = np.zeros((self.N,3))
-        self.contact_force_error = np.zeros((self.N, 3))
+        self.normal_force_error = np.zeros((self.N, 3))
         
         for i in range(self.N):
             # angular velocity in body frame
@@ -250,10 +253,10 @@ class postProcessing:
                 self.F_dir_error[i, 2] = F_dir_error
             else:
                 self.compute_pos_mass(face_angle)
-                contact_forces = self.compute_contact_force_error()
-                self.contact_force_error[i, 0] = abs(contact_forces[0][0] - contact1_info[i, 9])
-                self.contact_force_error[i, 1] = abs(contact_forces[1][0] - contact2_info[i, 9])
-                self.contact_force_error[i, 2] = abs(contact_forces[2][0] - contact3_info[i, 9])
+                normal_forces_error = self.compute_normal_force_error(
+                                            contact1_info[i, 9], contact2_info[i, 9], contact3_info[i, 9])
+                
+                self.normal_force_error[i] = normal_forces_error
 
         self.initial_energy = E[0]
 
@@ -271,28 +274,23 @@ class postProcessing:
         else:
             self.E_maxabs_error = 0
 
-        self.F_maxabs_dir_error_a = 0
-        self.F_maxabs_dir_error_b = 0
-        self.F_maxabs_dir_error_c = 0
-        self.F_maxabs_mag_error_a = 0
-        self.F_maxabs_mag_error_b = 0
-        self.F_maxabs_mag_error_c = 0
-        self.contact_force_maxabs_error_a = 0
-        self.contact_force_maxabs_error_b = 0
-        self.contact_force_maxabs_error_c = 0
+        self.F_maxabs_dir_error = [0, 0, 0]
+        self.F_maxabs_mag_error = [0, 0, 0]
+        self.N_maxabs_error = [0, 0, 0]
+
 
         if self.complex:
             self.F_dir_error = self.F_dir_error[self.F_dir_error>0]
-            self.F_maxabs_dir_error_a = np.max(self.F_dir_error[:, 0])
-            self.F_maxabs_dir_error_b = np.max(self.F_dir_error[:, 1])
-            self.F_maxabs_dir_error_c = np.max(self.F_dir_error[:, 2])
-            self.F_maxabs_mag_error_a = np.max(self.F_mag_error[:, 0])
-            self.F_maxabs_mag_error_b = np.max(self.F_mag_error[:, 1])
-            self.F_maxabs_mag_error_c = np.max(self.F_mag_error[:, 2])
+            self.F_maxabs_dir_error[0] = np.max(self.F_dir_error[:, 0])
+            self.F_maxabs_dir_error[1] = np.max(self.F_dir_error[:, 1])
+            self.F_maxabs_dir_error[2] = np.max(self.F_dir_error[:, 2])
+            self.F_maxabs_mag_error[0] = np.max(self.F_mag_error[:, 0])
+            self.F_maxabs_mag_error[1] = np.max(self.F_mag_error[:, 1])
+            self.F_maxabs_mag_error[2] = np.max(self.F_mag_error[:, 2])
         else:
-            self.contact_force_maxabs_error_a = np.max(self.contact_force_error[:, 0])
-            self.contact_force_maxabs_error_b = np.max(self.contact_force_error[:, 1])
-            self.contact_force_maxabs_error_c = np.max(self.contact_force_error[:, 2])
+            self.N_maxabs_error[0] = np.max(self.normal_force_error[:, 0])
+            self.N_maxabs_error[1] = np.max(self.normal_force_error[:, 1])
+            self.N_maxabs_error[2] = np.max(self.normal_force_error[:, 2])
 
     def save_metrics(self, face_angle, model_count):
         if complex:
@@ -300,13 +298,12 @@ class postProcessing:
         else:
             class_name = "static"
 
-        self.csv_writer.writerow([self.initial_energy, self.E_maxabs_error, self.contact_force_maxabs_error_a,
-                                  self.contact_force_maxabs_error_b, self.contact_force_maxabs_error_b, 
-                                  self.F_maxabs_mag_error_a, self.F_maxabs_mag_error_b, self.F_maxabs_mag_error_c,
-                                  self.F_maxabs_dir_error_a, self.F_maxabs_dir_error_b, self.F_maxabs_dir_error_c,
-                                  face_angle, self.dt, self.physics_engine, self.fricition_model, self.cog_height,
-                                  self.complex, model_count, self.sim_time, self.computation_time, self.time_ratio,
-                                  class_name])
+        self.csv_writer.writerow([self.initial_energy, self.E_maxabs_error, self.N_maxabs_error[0],
+                                  self.N_maxabs_error[1], self.N_maxabs_error[2], self.F_maxabs_mag_error[0], 
+                                  self.F_maxabs_mag_error[1], self.F_maxabs_mag_error[2], self.F_maxabs_dir_error[0],
+                                  self.F_maxabs_dir_error[1], self.F_maxabs_dir_error[2], face_angle, self.dt, 
+                                  self.physics_engine, self.mu, self.fricition_model, self.cog_height, self.complex,
+                                  model_count, self.sim_time, self.computation_time, self.time_ratio, class_name])
 
         
 if __name__ == "__main__":
