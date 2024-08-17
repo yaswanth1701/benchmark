@@ -60,7 +60,7 @@ class postProcessing:
                    "contactForceErr_c_maxAbs", "frictionForceMagErr_a_maxAbs", "frictionForceMagErr_b_maxAbs",
                    "frictionForceMagErr_c_maxAbs", "frictionForceDirErr_a_maxAbs", "frictionForceDirErr_b_maxAbs",
                    "frictionForceDirErr_c_maxAbs", "face_angle", "dt", "engine", "friction_coefficient", "friction_model", 
-                   "cog_h", "isComplex", "modelCount", "simTime", "time", "timeRatio", "classname"]
+                   "cog_h", "surface_slope", "isComplex", "modelCount", "simTime", "time", "timeRatio", "classname"]
         self.csv_writer.writerow(metrics)
 
     def read_file(self,file_path: str):
@@ -74,18 +74,18 @@ class postProcessing:
         file_names = os.listdir(result_dir) 
         return result_dir, file_names
     
-    def set_test_parameters(self, physic_engine, dt, friction_model,
-                            complex, surface_slope, friction_coefficient, 
-                            cog_height, equal_ke, computation_time):
+    def set_test_parameters(self,physic_engine, dt, friction_model, 
+                            complex, slope, friction_coefficient,
+                            cog_height, equal_KE, wall_time):
         self.physics_engine = physic_engine
         self.dt = dt
         self.fricition_model = friction_model
         self.complex = complex
-        self.surface_slope = surface_slope
+        self.surface_slope = slope
         self.mu = friction_coefficient
         self.cog_height = cog_height
-        self.equal_ke = equal_ke
-        self.computation_time = computation_time
+        self.equal_ke = equal_KE
+        self.computation_time = wall_time
 
         if complex:
             self.class_name = "static"
@@ -302,8 +302,9 @@ class postProcessing:
                                   self.N_maxabs_error[1], self.N_maxabs_error[2], self.F_maxabs_mag_error[0], 
                                   self.F_maxabs_mag_error[1], self.F_maxabs_mag_error[2], self.F_maxabs_dir_error[0],
                                   self.F_maxabs_dir_error[1], self.F_maxabs_dir_error[2], face_angle, self.dt, 
-                                  self.physics_engine, self.mu, self.fricition_model, self.cog_height, self.complex,
-                                  model_count, self.sim_time, self.computation_time, self.time_ratio, class_name])
+                                  self.physics_engine, self.mu, self.fricition_model, self.cog_height, self.surface_slope,
+                                  self.complex, model_count, self.sim_time, self.computation_time, self.time_ratio,
+                                  class_name])
 
         
 if __name__ == "__main__":
@@ -323,10 +324,10 @@ if __name__ == "__main__":
         complex = bool(config[0,2])
         slope = config[0,3]
         friction_coefficient = config[0,4]
-        friction_model = config[0,4]
-        cog_height = config[0,5]
-        wall_time = config[0, 6]
-        equal_KE = config[0, 7]
+        friction_model = config[0,5]
+        cog_height = config[0,6]
+        wall_time = config[0, 7]
+        equal_KE = config[0, 8]
 
         if complex:
             no_of_models = 19
