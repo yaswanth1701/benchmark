@@ -182,13 +182,13 @@ class PostProcessing:
        def get_avgabs_error(self):
            '''Method for calculation of avg absolute error'''
 
-           v_avgabs_error = np.sum(self.v_error_mag)/self.N
-           p_avgabs_error = np.sum(self.pos_error_mag)/self.N
-           E_avgabs_error = np.sum(self.energy_error_mag)/self.N
-           L_avgabs_error = np.sum(self.angmomentum_error_mag)/self.N
-           a_avgabs_error_x = np.sum(self.angle_error_mag[:, 0])/self.N
-           a_avgabs_error_y = np.sum(self.angle_error_mag[:, 1])/self.N
-           a_avgabs_error_z = np.sum(self.angle_error_mag[:, 2])/self.N
+           v_avgabs_error = np.mean(self.v_error_mag)
+           p_avgabs_error = np.mean(self.pos_error_mag)
+           E_avgabs_error = np.mean(self.energy_error_mag)
+           L_avgabs_error = np.mean(self.angmomentum_error_mag)
+           a_avgabs_error_x = np.mean(self.angle_error_mag[:, 0])
+           a_avgabs_error_y = np.mean(self.angle_error_mag[:, 1])
+           a_avgabs_error_z = np.mean(self.angle_error_mag[:, 2])
 
 
            print("  -> Average absolute error")
