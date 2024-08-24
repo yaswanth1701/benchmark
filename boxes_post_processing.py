@@ -137,7 +137,7 @@ class PostProcessing:
             pos_error = (pos - self.pos_a)
             self.pos_error_mag = np.array([np.linalg.norm(p) for p in pos_error])
  
-            self.energy_error = (E - self.E0)/self.E0_mag
+            self.energy_error = (E - self.E0)/self.E0
             self.energy_error_mag = np.array([np.linalg.norm(e) for e in self.energy_error])
 
             angmomentum_error = (L - self.L0)/self.L0_mag
