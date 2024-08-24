@@ -130,7 +130,7 @@ class PostProcessing:
                 l_w = quat.rotate_vector(l_vector)
                 L[i] = np.array([l_w[0], l_w[1], l_w[2]])
 
-            # calculation of velocity and postion error and their magnitude
+            # calculation of velocity and position error and their magnitude
             v_error = (v - self.v_a)
             self.v_error_mag = np.array([np.linalg.norm(x) for x in v_error])
 
