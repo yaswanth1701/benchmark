@@ -12,8 +12,7 @@ SOURCE_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 BENCHMARK_NAME = sys.argv[1]
 
-class PostProcessing:
-       
+class postProcessing:
        def __init__(self, test_name: str):
            self.m = 10
            self.g = 9.8
@@ -27,7 +26,7 @@ class PostProcessing:
            self.sim_duration = 10
            
            timestr = time.strftime("%Y%m%d-%H%M%S")
-           metrics_filename = test_name + "_" + timestr + ".csv"
+           metrics_filename = test_name + "_" + "metrics" + "_" + timestr +".csv"
            self.metrics_path = os.path.join(SOURCE_FOLDER, "test_results", metrics_filename)
            print(f"metrics path is {self.metrics_path}")
 
@@ -40,14 +39,12 @@ class PostProcessing:
                       "linVelocityErr_maxAbs", "modelCount", "simTime", "time", "timeRatio", "classname"]
            self.csv_writer.writerow(metrics)
 
-
-
-       def read_file(self,file_path: str):
+       def read_test_data(self,file_path: str):
            benchmark_config = pd.read_csv(file_path, nrows=1).to_numpy()
            states = pd.read_csv(file_path,skiprows=2).to_numpy()
            return benchmark_config, states
     
-       def get_file_names(self, result_folder: str):
+       def get_test_files(self):
            '''Method to obtain the file names and file paths of benchmark result'''
            result_dir = os.path.join(SOURCE_FOLDER, "test_results", BENCHMARK_NAME, "CSV")
            file_names = os.listdir(result_dir) 
@@ -65,8 +62,8 @@ class PostProcessing:
            self.class_name = class_name
        
        def get_analytical_sol(self, sim_time: np.ndarray, model_no: int):
-           '''method to get the analytical solution for box benchmark'''
-
+           '''Method to get the analytical solution for box benchmark'''
+           # initial condition for complex and simple case
            if not self.complex:
             v0 = np.array([-0.9, 0.4, 0.1])
             self.w0 = np.array([0.5, 0.0, 0.0])
@@ -97,7 +94,7 @@ class PostProcessing:
                self.v_a[i] = v0 + self.gravity*t
                self.pos_a[i] = self.pos0 + v0*t + 0.5*self.gravity*t**2
 
-       def cal_metrics(self,states: np.ndarray):
+       def cal_metrics(self, states: np.ndarray):
             '''Method for calculating the various error/metrics'''
             sim_time = states[:,0]
             v = states[:,2:5]
@@ -130,7 +127,7 @@ class PostProcessing:
                 l_w = quat.rotate_vector(l_vector)
                 L[i] = np.array([l_w[0], l_w[1], l_w[2]])
 
-            # calculation of velocity and position error and their magnitude
+            # calculation of velocity, position, angular momentum and energy error and their magnitudes
             v_error = (v - self.v_a)
             self.v_error_mag = np.array([np.linalg.norm(x) for x in v_error])
 
@@ -143,7 +140,7 @@ class PostProcessing:
             angmomentum_error = (L - self.L0)/self.L0_mag
             self.angmomentum_error_mag = np.array([np.linalg.norm(l) for l in angmomentum_error])
             
-            # calculating angle error
+            # calculating orientation error only in simple case
             self.angle_error = np.zeros((self.N,3))
             if not self.complex:
                 w0 = np.array([0.5, 0.0, 0.0])
@@ -190,7 +187,6 @@ class PostProcessing:
            a_avgabs_error_y = np.mean(self.angle_error_mag[:, 1])
            a_avgabs_error_z = np.mean(self.angle_error_mag[:, 2])
 
-
            print("  -> Average absolute error")
            print("  ----------------------------------")
            print(f"  Linear velocity:  {v_avgabs_error} \n  Position:         {p_avgabs_error} \
@@ -209,20 +205,22 @@ class PostProcessing:
                                      self.total_sim_time, self.computation_time, self.time_ratio,
                                      self.class_name])
     
-
-       
 if __name__ == "__main__":
     dir = BENCHMARK_NAME
     print(f"BENCHMARK: {dir}")
 
-    post_processing = PostProcessing(dir)
-    result_dir , file_names = post_processing.get_file_names(dir)
+    post_processing = postProcessing(dir)
+    # getting all the test results corresding to benchmark type boxes_dt or boxes_model_count
+    # result directory global path and file name of test
+    result_dir , file_names = post_processing.get_test_files()
     file_names = sorted(file_names, reverse=True)
 
     for file in file_names:
+        # tests name
         print(f"TEST: {file}")
         file_path = os.path.join(result_dir,file)
-        config, states = post_processing.read_file(file_path)
+        # test parameter and simulation data(states of model)
+        config, states = post_processing.read_test_data(file_path)
         physic_engine = config[0,0]
         dt = config[0,1]
         complex = bool(config[0,2])
@@ -234,11 +232,13 @@ if __name__ == "__main__":
             
         print(f" Physics engines: {physic_engine} \n Timestep: {dt} \n Complex: {complex} \n Number of models: {modelCount}")
         post_processing.set_test_parameters(physic_engine, dt, complex, collision, modelCount, computation_time, class_name)
-
+        
+        # check if multiple boxes/model states(pose and twist) are logged
         if log_multiple:
             no_of_models = modelCount
         else:
             no_of_models = 1 
+        # used for indexing the model states in csv file
         states_per_model = int(len(states[:,0])/no_of_models)
         states = states.reshape(no_of_models, states_per_model,-1)
 
@@ -246,13 +246,19 @@ if __name__ == "__main__":
             print(f" => Model number: {i+1}")
             model_states = states[i]
             sim_time = model_states[:,0]
-
+            # analytical solution for free-floating body
             post_processing.get_analytical_sol(sim_time, i)
+            # calculating error for position, velocity, angular momentum and enegry
             post_processing.cal_metrics(model_states)
+            # storing test performance metrics
             post_processing.save_metrics()
     
     post_processing.csv_file.close()
     print(f"final metrics path {post_processing.metrics_path}")
     data = pd.read_csv(post_processing.metrics_path)
-    storted_data = data.sort_values(by='dt')
+
+    if dir == "BENCHARK_boxes_dt":
+        storted_data = data.sort_values(by='dt')
+    else:
+        storted_data = data.sort_values(by='modelCount')
     storted_data.to_csv(post_processing.metrics_path, index=False)
