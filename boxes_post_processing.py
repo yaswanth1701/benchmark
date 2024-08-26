@@ -63,7 +63,7 @@ class postProcessing:
        
        def get_analytical_sol(self, sim_time: np.ndarray, model_no: int):
            '''Method to get the analytical solution for box benchmark'''
-           # initial condition for complex and simple case
+           # initial condition for the complex and simple case
            if not self.complex:
             v0 = np.array([-0.9, 0.4, 0.1])
             self.w0 = np.array([0.5, 0.0, 0.0])
@@ -80,7 +80,7 @@ class postProcessing:
            self.pos_a = np.zeros((self.N,3))
            self.v_a = np.zeros((self.N,3))   
 
-           # calculation of initial energy and angular momentum
+           # Calculation of initial energy and angular momentum
            self.L0 = self.I.dot(self.w0)
            self.L0_mag = np.linalg.norm(self.L0)
 
@@ -127,7 +127,7 @@ class postProcessing:
                 l_w = quat.rotate_vector(l_vector)
                 L[i] = np.array([l_w[0], l_w[1], l_w[2]])
 
-            # calculation of velocity, position, angular momentum and energy error and their magnitudes
+            # calculation of velocity, position, angular momentum, and energy error and their magnitudes
             v_error = (v - self.v_a)
             self.v_error_mag = np.array([np.linalg.norm(x) for x in v_error])
 
@@ -210,8 +210,8 @@ if __name__ == "__main__":
     print(f"BENCHMARK: {dir}")
 
     post_processing = postProcessing(dir)
-    # getting all the test results corresding to benchmark type boxes_dt or boxes_model_count
-    # result directory global path and file name of test
+    # getting all the test results corresponding to benchmark type boxes_dt or boxes_model_count
+    # result directory global path and file name of the tests
     result_dir , file_names = post_processing.get_test_files()
     file_names = sorted(file_names, reverse=True)
 
@@ -219,7 +219,7 @@ if __name__ == "__main__":
         # tests name
         print(f"TEST: {file}")
         file_path = os.path.join(result_dir,file)
-        # test parameter and simulation data(states of model)
+        # test/simulation parameter and simulation data(states of model)
         config, states = post_processing.read_test_data(file_path)
         physic_engine = config[0,0]
         dt = config[0,1]
@@ -238,7 +238,7 @@ if __name__ == "__main__":
             no_of_models = modelCount
         else:
             no_of_models = 1 
-        # used for indexing the model states in csv file
+        # used for indexing the raw simulation data/model states in CSV file
         states_per_model = int(len(states[:,0])/no_of_models)
         states = states.reshape(no_of_models, states_per_model,-1)
 
@@ -246,9 +246,9 @@ if __name__ == "__main__":
             print(f" => Model number: {i+1}")
             model_states = states[i]
             sim_time = model_states[:,0]
-            # analytical solution for free-floating body
+            # Analytical solution for free-floating body
             post_processing.get_analytical_sol(sim_time, i)
-            # calculating error for position, velocity, angular momentum and enegry
+            # calculating error for the position, velocity, angular momentum, and enegry
             post_processing.cal_metrics(model_states)
             # storing test performance metrics
             post_processing.save_metrics()
